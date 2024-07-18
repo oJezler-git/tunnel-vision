@@ -1,0 +1,164 @@
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Tunnel Vision</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #000;
+        user-select: none;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.7.1/gsap.min.js"></script>
+    <script type="module">
+      import * as THREE from "https://cdn.skypack.dev/three@0.128.0/build/three.module.js";
+      import { OrbitControls } from "https://cdn.skypack.dev/three@0.128.0/examples/jsm/controls/OrbitControls.js";
+      import { EffectComposer } from "https://cdn.skypack.dev/three@0.128.0/examples/jsm/postprocessing/EffectComposer.js";
+      import { RenderPass } from "https://cdn.skypack.dev/three@0.128.0/examples/jsm/postprocessing/RenderPass.js";
+      import { GlitchPass } from "https://cdn.skypack.dev/three@0.128.0/examples/jsm/postprocessing/GlitchPass.js";
+      import { UnrealBloomPass } from "https://cdn.skypack.dev/three@0.128.0/examples/jsm/postprocessing/UnrealBloomPass.js";
+
+      // Initialize scene, camera, and renderer
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(
+        75,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000
+      );
+      const renderer = new THREE.WebGLRenderer();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      // Parameters for TorusKnotGeometry
+      const params = {
+        radius: 6.2,
+        tubeRadius: 1.0,
+        radialSegments: 5,
+        tubularSegments: 64,
+        p: 1,
+        q: 4,
+      };
+
+      let torusKnot = createTorusKnot();
+
+      // Function to create TorusKnotGeometry
+      function createTorusKnot() {
+        const geometry = new THREE.TorusKnotGeometry(
+          params.radius,
+          params.tubeRadius,
+          params.tubularSegments,
+          params.radialSegments,
+          params.p,
+          params.q
+        );
+        const material = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          wireframe: true,
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
+        return mesh;
+      }
+
+      // GUI controls
+      const gui = new dat.GUI();
+      gui.add(params, "radius", 1, 10).onChange(updateGeometry);
+      gui.add(params, "tubeRadius", 0.1, 3).onChange(updateGeometry);
+      gui.add(params, "radialSegments", 3, 20).step(1).onChange(updateGeometry);
+      gui
+        .add(params, "tubularSegments", 3, 200)
+        .step(1)
+        .onChange(updateGeometry);
+      gui.add(params, "p", 1, 10).step(1).onChange(updateGeometry);
+      gui.add(params, "q", 1, 10).step(1).onChange(updateGeometry);
+
+      function updateGeometry() {
+        scene.remove(torusKnot);
+        torusKnot.geometry.dispose();
+        torusKnot.material.dispose();
+        torusKnot = createTorusKnot();
+      }
+
+      // Lighting
+      const ambientLight = new THREE.AmbientLight(0x404040);
+      scene.add(ambientLight);
+
+      const pointLight = new THREE.PointLight(0xffffff, 1);
+      camera.add(pointLight);
+      scene.add(camera);
+
+      // Post-processing
+      const composer = new EffectComposer(renderer);
+      const renderPass = new RenderPass(scene, camera);
+      composer.addPass(renderPass);
+
+      const bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        1.25,
+        0.4,
+        0.85
+      );
+      composer.addPass(bloomPass);
+
+      // OrbitControls
+      const controls = new OrbitControls(camera, renderer.domElement);
+
+      // Camera animation
+      let speed = 0.02;
+      function animateCamera() {
+        requestAnimationFrame(animateCamera);
+        camera.position.x =
+          params.radius * Math.cos(speed * Date.now() * 0.001);
+        camera.position.y =
+          params.radius * Math.sin(speed * Date.now() * 0.001);
+        camera.lookAt(torusKnot.position);
+        controls.update();
+        composer.render();
+      }
+      animateCamera();
+
+      // Color transition with GSAP
+      const colors = [
+        { r: 0, g: 0, b: 255 },
+        { r: 255, g: 0, b: 255 },
+        { r: 0, g: 255, b: 0 },
+        { r: 255, g: 165, b: 0 },
+      ];
+
+      function changeColor() {
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        gsap.to(torusKnot.material.color, {
+          r: color.r / 255,
+          g: color.g / 255,
+          b: color.b / 255,
+          duration: 1,
+        });
+        setTimeout(changeColor, 4000); // Change color every 4 seconds
+      }
+      changeColor();
+
+      // Speed control
+      window.addEventListener("wheel", (event) => {
+        speed += event.deltaY * -0.0001;
+        speed = Math.min(Math.max(speed, 0.01), 0.1); // Limit speed
+      });
+
+      // Resize handling
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        composer.setSize(window.innerWidth, window.innerHeight);
+      });
+    </script>
+  </body>
+</html>
